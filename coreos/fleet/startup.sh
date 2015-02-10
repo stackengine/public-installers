@@ -28,6 +28,8 @@ else
 
 fi
 
+
+
 echo "DOCKER_INTERFACE=${DOCKER_INTERFACE}"
 
 # If a namespace for StackEngine does not exist create one. Etcd sees this
@@ -54,27 +56,27 @@ if [[ $(echo $KEYCHECK | grep errorCode) ]]; then
 
         # This is a follower so the `-join` flag is used to say "join as a 
         # follower"
-        STARTUP_PARAMS="-admin -bind=${COREOS_PUBLIC_IPV4} -debug=all -data=/stackenginedata -join=${RING_IP}"
+        STARTUP_PARAMS="-admin -bind=${COREOS_PRIVATE_IPV4} -debug=all -data=/stackenginedata -join=${RING_IP}"
         
         # Place a key/value in the leadership-ring 
-        curl -L http://${DOCKER_INTERFACE}:4001/v2/keys/stackengine/leadership-ring/$DOCKER_HOSTNAME -XPUT -d value="${COREOS_PUBLIC_IPV4}"
+        curl -L http://${DOCKER_INTERFACE}:4001/v2/keys/stackengine/leadership-ring/$DOCKER_HOSTNAME -XPUT -d value="${COREOS_PRIVATE_IPV4}"
 
     else
 
         # This is a client so we use the `-mesh` switch to say "just join the
         # mesh but don't participate in consensus".  No entry need occur to the 
         # leadership ring.
-        STARTUP_PARAMS="-bind=${COREOS_PUBLIC_IPV4} -debug=all -data=/stackenginedata -mesh=${RING_IP}"   
+        STARTUP_PARAMS="-bind=${COREOS_PRIVATE_IPV4} -debug=all -data=/stackenginedata -mesh=${RING_IP}"   
 
     fi
 
 else
 
     # This is a leader
-    STARTUP_PARAMS="-admin -bind=${COREOS_PUBLIC_IPV4} -debug=all -data=/stackenginedata"
+    STARTUP_PARAMS="-admin -bind=${COREOS_PRIVATE_IPV4} -debug=all -data=/stackenginedata"
 
     # Place a key/value in the leadership-ring 
-    curl -L http://${DOCKER_INTERFACE}:4001/v2/keys/stackengine/leadership-ring/$DOCKER_HOSTNAME -XPUT -d value="${COREOS_PUBLIC_IPV4}"
+    curl -L http://${DOCKER_INTERFACE}:4001/v2/keys/stackengine/leadership-ring/$DOCKER_HOSTNAME -XPUT -d value="${COREOS_PRIVATE_IPV4}"
 
 fi
 
