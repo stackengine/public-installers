@@ -1,8 +1,19 @@
 #!/bin/bash
 
+#Variables used by installer
+INSTALL_ROOT="/usr/local/stackengine"
+LOG_ROOT="/var/log/stackengine"
+LOG_FILE_NAME="stackengine.log"
+
 install_docker()
 {
-	echo "Installing Docker"
+	echo "Checking to see if docker was installed"
+}
+
+start_stackengine()
+{
+	#startup the stackengine leader
+	sudo /usr/local/stackengine/stackengine -admin=true -debug=all -logfile=/var/log/stackengine/stackengine.log &
 }
 
 install_stackengine()
@@ -20,8 +31,6 @@ install_stackengine()
 	md5=`md5sum /usr/local/stackengine/stackengine | awk '{ print $1 }'`
 	expected_md5=$(</usr/local/stackengine/stackengine.md5)
 	echo "Verifying MD5 matches"
-	echo $md5
-	echo $expected_md5
 	if [ "$expected_md5" != "$md5" ]
 	then
 		echo "MD5 sums mismatch, cannot proceed"
@@ -30,8 +39,6 @@ install_stackengine()
 		echo "MD5 sum check verified"
 	fi
 	sudo chmod +x /usr/local/stackengine/stackengine
-	#startup the leader
-	sudo /usr/local/stackengine/stackengine -admin=true -debug=all -logfile=/var/log/stackengine/stackengine.log &
 }
 
 generate_license()
@@ -44,5 +51,25 @@ uninstall_stackengine()
 	sudo rm -rf /usr/local/stackengine
 	sudo rm -rf /var/log/stackengine
 }
+############################################
+############################################
+## 		End functions 		   ##
+############################################
+############################################
 
+echo
+echo
+
+# Check to see if you're root
+if [ "`id -u`" != "0" ]; then
+cat <<EOF >&2
+
+You must be root (or use sudo) in order to run the stackengine installer!
+
+EOF
+    exit 1
+fi
+
+install_docker
 install_stackengine
+start_stackengine
