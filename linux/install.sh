@@ -54,7 +54,6 @@ ensure_directory() {
     mkdir -p ${1}
 }
 
-
 download_and_verify() {
  	${ECHO} "\tFetching stackengine binary"
 
@@ -82,7 +81,7 @@ set_install_type() {
     # now figure out Distribution
     # there are more files we can look at but for now just look at /etc/issue 
     INSTALL_DISTRO=$(awk 'NR==1{print $1}' /etc/issue)
-    [[ -z ${INSTALL_DISTRO} ]] && Error 9 "Unable to figureout the Distribution for this linux system"
+    [[ -z ${INSTALL_DISTRO} ]] && Error 9 "Unable to figure out the Distribution for this linux system"
     export INSTALL_DISTRO
 }
 
@@ -162,7 +161,17 @@ install_stackengine() {
 	ensure_directory ${DATA_DIR}
 
     # for now just create an empty config file
-    >${CONFIG_FILE}
+    cat <<EOF  >${CONFIG_FILE}
+#
+# Optional args to start stackengine controller
+#
+STACKENGINE_ARGS=""
+
+#
+# The following example enables ALL looging 
+# (uncomment this line to open the logging flood gates)
+# STACKENGINE_ARGS="--debug all"
+EOF
 
 	download_and_verify
     ensure_ownership
