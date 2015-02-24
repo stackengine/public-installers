@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Variables used by installer
-INSTALL_DIR=/usr/local/stackengine
+INSTALL_DIR=${INSTALL_DIR:-/usr/local/stackengine}
 BINFILE=${INSTALL_DIR}/stackengine
 #
-LOG_DIR=/var/log/stackengine
+LOG_DIR=${LOG_DIR:-/var/log/stackengine}
 LOG_FILENAME=stackengine.log
 LOG_PATHNAME=${LOG_DIR}/${LOG_FILENAME}
 
-DATA_DIR=/var/lib/stackengine
+DATA_DIR=${DATA_DIR:-/var/lib/stackengine}
 CONFIG_FILE=${DATA_DIR}/config
 
 # curl is used to fetch binary and md5 info
@@ -21,8 +21,8 @@ MD5_OPTS=
 MD5_INFOFILE=/tmp/stackengine.md5
 
 # urls to cool stuff
-STACKENGINE_URL=https://s3.amazonaws.com/stackengine-controller/linux64/stackengine
-STACKENGINE_MD5_URL=https://s3.amazonaws.com/stackengine-controller/linux64/stackengine.md5
+STACKENGINE_URL=${STACKENGINE_URL:-https://s3.amazonaws.com/stackengine-controller/linux64/stackengine}
+STACKENGINE_MD5_URL=${STACKENGINE_URL}.md5
 
 #
 ECHO="/bin/echo -e "
