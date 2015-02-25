@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash 
 
 # Variables used by installer
 INSTALL_DIR=${INSTALL_DIR:-/usr/local/stackengine}
@@ -79,19 +79,29 @@ set_install_type() {
     export INSTALL_SYS
 
     # now figure out Distribution
-    # there are more files we can look at but for now just look at /etc/issue 
     INSTALL_DISTRO=$(awk 'NR==1{print $1}' /etc/issue)
     [[ -z ${INSTALL_DISTRO} ]] && Error 9 "Unable to figure out the Distribution for this linux system"
+
+    [[ -e "/etc/redhat-release" ]] && INSTALL_DISTRO="RHEL"
+
     export INSTALL_DISTRO
+
+    # override config file location iff needed (if it's not upstart)
+    case ${INSTALL_DISTRO} in
+        Amazon|Fedora|RHEL|CentOS)
+            [ -e /sbin/initctl -a -e /etc/init ] || export CONFIG_FILE=/etc/sysconfig/stackengine
+            ;;
+    esac
 }
 
 add_stackengine_user() {
     ${ECHO} "\tAdding Stackengine user and group"
-    groupadd stackengine 2>/dev/null
-    useradd -g stackengine --system stackengine 2>/dev/null
+    groupadd stackengine 2>/dev/null 
+    useradd -g stackengine --system stackengine 2>/dev/null 
+
     ## add stackengine to docker group 
     ${ECHO} "\tAdding Stackengine to docker group"
-    usermod -aG docker stackengine 2>/dev/null
+    usermod -aG docker stackengine 2>/dev/null 
 }
 
 ensure_ownership() {
@@ -103,7 +113,9 @@ ensure_ownership() {
 }
 
 install_upstart_init() {
+    ${ECHO} "\t-------------------------------"
     ${ECHO} "\tInstalling upstart init script"
+    ${ECHO} "\t-------------------------------"
     # remove any previous scripts
     rm -f /etc/init/stackengine.conf
 
@@ -130,11 +142,116 @@ EOF
     initctl reload-configuration
 }
 
+install_sysv_init() {
+    ${ECHO} "\t----------------------------"
+    ${ECHO} "\tInstalling SysV init script"
+    ${ECHO} "\t----------------------------"
+    rm -f /etc/init.d/stackengine
+    cat <<EOF > /etc/init.d/stackengine
+#! /bin/bash
+#
+# stackengine    Start/Stop the stackengine Agent.
+#
+# chkconfig: - 95 05
+# description: stackengine controller 
+# processname: stackengine
+
+# Source function library.
+. /etc/init.d/functions
+
+# Source optional configuration file 
+if [ -f ${CONFIG_FILE} ] ; then
+    . ${CONFIG_FILE}
+fi
+
+RETVAL=0
+
+# Set up some common variables before we launch
+prog=stackengine
+path=${BINFILE}
+
+start() {
+    echo -n \$"Starting \$prog: "
+    daemon --user stackengine \$path \${STACKENGINE_ARGS}
+    RETVAL=\$?
+    echo
+    [ \$RETVAL -eq 0 ] && touch /var/lock/subsys/\$prog
+    return \$RETVAL
+}
+
+stop() {
+    echo -n \$"Stopping \$prog: "
+    killproc \$path
+    RETVAL=\$?
+    echo
+    [ \$RETVAL -eq 0 ] && rm -f /var/lock/subsys/\$prog
+    return \$RETVAL
+}
+
+restart() {
+    stop
+    start
+}
+
+reload() {
+    restart
+}
+
+rh_status_q() {
+    status \$prog >/dev/null 2>&1
+}
+
+case "\$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    reload)
+        rh_status_q || exit 7
+        reload
+        ;;
+    status)
+        status \$path
+        ;;
+    condrestart)
+        [ -f /var/lock/subsys/\$prog ] && restart || :
+        ;;
+    *)
+        echo $"Usage: \$0 {start|stop|status|reload|restart|condrestart}"
+        exit 1
+esac
+
+exit \$?
+EOF
+
+    chmod 755 /etc/init.d/stackengine
+
+    rm -f /etc/rc*.d/*stackengine
+    ln -s "../init.d/stackengine" "/etc/rc1.d/K99stackengine"
+    ln -s "../init.d/stackengine" "/etc/rc2.d/S99stackengine"
+    ln -s "../init.d/stackengine" "/etc/rc3.d/S99stackengine"
+    ln -s "../init.d/stackengine" "/etc/rc4.d/S99stackengine"
+    ln -s "../init.d/stackengine" "/etc/rc5.d/S99stackengine"
+    ln -s "../init.d/stackengine" "/etc/rc6.d/K99stackengine"
+}
+
 install_docker() {
     ${ECHO} "\tChecking and optionally installing current Docker (may take a while)"
     case ${INSTALL_DISTRO} in
         Debian|Ubuntu)
-            (apt-get update && apt-get install -y --upgrade lxc-docker) >/dev/null
+            (apt-get update && apt-get install -y --upgrade lxc-docker) >/dev/null 
+            service docker start
+            ;;
+
+        Amazon|Fedora|RHEL|CentOS)
+            rpm -iUvh http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+            yum install -y docker-io > /dev/null || Error 32 "Docker Install failed"
+            service docker start
             ;;
 
         *)
@@ -155,12 +272,14 @@ install_stackengine() {
     # now check on docker (may upgrade)
     install_docker
 
+    add_stackengine_user
+
 	# create stackengine required directories
 	ensure_directory ${INSTALL_DIR}
 	ensure_directory ${LOG_DIR}
 	ensure_directory ${DATA_DIR}
 
-    # for now just create an empty config file
+    # 
     cat <<EOF  >${CONFIG_FILE}
 #
 # Optional args to start stackengine controller
@@ -180,6 +299,10 @@ EOF
     case ${INSTALL_DISTRO} in
         Debian|Ubuntu)
             install_upstart_init
+            ;;
+
+        Amazon|Fedora|RHEL|CentOS)
+            [ -e /sbin/initctl -a -e /etc/init ] && install_upstart_init || install_sysv_init 
             ;;
 
         *)
