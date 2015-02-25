@@ -153,8 +153,19 @@ install_sysv_init() {
 # stackengine    Start/Stop the stackengine Agent.
 #
 # chkconfig: - 95 05
-# description: stackengine controller 
 # processname: stackengine
+
+### BEGIN INIT INFO
+# Provides:       stackengine
+# Required-Start: docker
+# Required-Stop:
+# Should-Start:
+# Should-Stop:
+# Default-Start: 2 3 4 5
+# Default-Stop:  0 1 6
+# Short-Description: start and stop stackengine controller
+# Description: stackengine controller 
+### END INIT INFO
 
 # Source function library.
 . /etc/init.d/functions
