@@ -125,8 +125,8 @@ install_upstart_init() {
 
 description "StackEngine Controller"
 
-start on runlevel [2345]
-stop on runlevel [06]
+start on started docker
+stop on stopping docker
 
 chdir ${DATA_DIR}
 kill timeout 5
