@@ -24,6 +24,7 @@ MD5_INFOFILE=/tmp/stackengine.md5
 STACKENGINE_URL=${STACKENGINE_URL:-https://s3.amazonaws.com/stackengine-controller/linux64/stackengine}
 STACKENGINE_MD5_URL=${STACKENGINE_URL}.md5
 
+ID=${ID:-"unset"}
 #
 ECHO="/bin/echo -e "
 
@@ -292,6 +293,9 @@ install_stackengine() {
 
     # 
     cat <<EOF  >${CONFIG_FILE}
+# A generated lic ID
+ID=${ID}
+
 #
 # Optional args to start stackengine controller
 #
