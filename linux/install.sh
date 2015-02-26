@@ -294,7 +294,7 @@ install_stackengine() {
     # 
     cat <<EOF  >${CONFIG_FILE}
 # A generated lic ID
-ID=${ID}
+export ID=${ID}
 
 #
 # Optional args to start stackengine controller
@@ -307,7 +307,7 @@ STACKENGINE_ARGS=""
 STACKENGINE_ARGS="--debug all"
 
 # ----------- for testing remove when done
-SE_LICENSE_SERVER=https://lic-testing.stackengine.com
+export SE_LICENSE_SERVER=https://lic-testing.stackengine.com
 EOF
 
 	download_and_verify
