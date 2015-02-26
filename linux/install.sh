@@ -300,7 +300,7 @@ STACKENGINE_ARGS=""
 #
 # The following example enables ALL looging 
 # (uncomment this line to open the logging flood gates)
-# STACKENGINE_ARGS="--debug all"
+STACKENGINE_ARGS="--debug all"
 
 # ----------- for testing remove when done
 SE_LICENSE_SERVER=https://lic-testing.stackengine.com
@@ -347,7 +347,7 @@ fi
 
 # validate access to md5suml(1) 
 [[ -z "${MD5_BIN}" ]] && Error 2 "unable to locate md5sum(1)"
-
+stop stackengine
 install_stackengine
 start stackengine
 
