@@ -21,7 +21,7 @@ MD5_OPTS=
 MD5_INFOFILE=/tmp/stackengine.md5
 
 # urls to cool stuff
-STACKENGINE_URL=${STACKENGINE_URL:-https://stackengine-kg.s3.amazonaws.com/stackengine}
+STACKENGINE_URL=${STACKENGINE_URL:-https://s3.amazonaws.com/stackengine-controller/linux64/stackengine}
 STACKENGINE_MD5_URL=${STACKENGINE_URL}.md5
 
 #
