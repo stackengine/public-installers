@@ -349,5 +349,6 @@ fi
 [[ -z "${MD5_BIN}" ]] && Error 2 "unable to locate md5sum(1)"
 
 install_stackengine
+service start stackengine
 
 ${ECHO} "Install completed: $(date)\n"
