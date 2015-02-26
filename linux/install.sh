@@ -301,6 +301,9 @@ STACKENGINE_ARGS=""
 # The following example enables ALL looging 
 # (uncomment this line to open the logging flood gates)
 # STACKENGINE_ARGS="--debug all"
+
+# ----------- for testing remove when done
+SE_LICENSE_SERVER=https://lic-testing.stackengine.com
 EOF
 
 	download_and_verify
