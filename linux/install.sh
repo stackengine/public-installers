@@ -24,7 +24,7 @@ MD5_INFOFILE=/tmp/stackengine.md5
 STACKENGINE_URL=${STACKENGINE_URL:-https://s3.amazonaws.com/stackengine-controller/linux64/stackengine}
 STACKENGINE_MD5_URL=${STACKENGINE_URL}.md5
 
-LEADER=${LEADER:-$(hostname)
+LEADER=${LEADER:-$(hostname)}
 
 ID=${ID:-"unset"}
 #
