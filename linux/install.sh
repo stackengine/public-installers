@@ -362,4 +362,4 @@ install_stackengine
 start stackengine
 
 ${ECHO} "Install completed: $(date)\n"
-${ECHO} "\nConnect to StackEngine Admin via: http://127.0.0.1:8000\n"
+${ECHO} "\nConnect to StackEngine Admin via: http://$(hostname):8000\n"
