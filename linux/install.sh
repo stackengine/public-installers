@@ -299,12 +299,12 @@ export ID=${ID}
 #
 # Optional args to start stackengine controller
 #
-STACKENGINE_ARGS=""
+STACKENGINE_ARGS=${STACKENGINE_ARGS}
 
 #
 # The following example enables ALL looging 
 # (uncomment this line to open the logging flood gates)
-STACKENGINE_ARGS="--debug all"
+STACKENGINE_ARGS=\${STACKENGINE_ARGS} --debug all
 
 # ----------- for testing remove when done
 export SE_LICENSE_SERVER=https://lic-testing.stackengine.com
@@ -351,8 +351,15 @@ fi
 
 # validate access to md5suml(1) 
 [[ -z "${MD5_BIN}" ]] && Error 2 "unable to locate md5sum(1)"
-stop stackengine
+
+# if the stackengine controller is running stop it
+# ignore any errors. 
+stop stackengine 2> /dev/null
+
+# install 
 install_stackengine
+
 start stackengine
 
 ${ECHO} "Install completed: $(date)\n"
+${ECHO} "\nConnect to StackEngine Admin via: http://127.0.0.1:8000\n"
