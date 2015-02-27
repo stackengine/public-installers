@@ -24,6 +24,8 @@ MD5_INFOFILE=/tmp/stackengine.md5
 STACKENGINE_URL=${STACKENGINE_URL:-https://s3.amazonaws.com/stackengine-controller/linux64/stackengine}
 STACKENGINE_MD5_URL=${STACKENGINE_URL}.md5
 
+LEADER=${LEADER:-$(hostname)
+
 ID=${ID:-"unset"}
 #
 ECHO="/bin/echo -e "
@@ -362,4 +364,4 @@ install_stackengine
 start stackengine
 
 ${ECHO} "Install completed: $(date)\n"
-${ECHO} "\nConnect to StackEngine Admin via: http://$(hostname):8000\n"
+${ECHO} "\nConnect to StackEngine Admin via: http://${LEADER}:8000\n"
