@@ -101,6 +101,9 @@ Vagrant.configure("2") do |config|
         config.vm.network "forwarded_port", guest: 2375, host: ($expose_docker_tcp + i - 1), auto_correct: true
       end
 
+      if $stack_engine_admin_port && i == 1
+        config.vm.network "forwarded_port", guest: $stack_engine_admin_port, host: ($stack_engine_admin_port + i - 1), auto_correct: true
+      end
       config.vm.provider :vmware_fusion do |vb|
         vb.gui = $vb_gui
       end
@@ -113,6 +116,17 @@ Vagrant.configure("2") do |config|
 
       ip = "172.17.8.#{i+100}"
       config.vm.network :private_network, ip: ip
+
+      config.vm.provision "shell", inline: "curl -s -o ./stackengine.service 'https://raw.githubusercontent.com/stackengine/public-installers/master/coreos/fleet/stackengine.service'", run: "always"
+      config.vm.provision "shell", inline: "curl -s -o ./stackenginedata.service 'https://raw.githubusercontent.com/stackengine/public-installers/master/coreos/fleet/stackenginedata.service'", run: "always"
+      config.vm.provision "shell", inline: "systemctl restart fleet", run: "always"
+      if i == 1
+        config.vm.provision "shell", inline: "fleetctl submit stackenginedata.service", run: "always"
+        config.vm.provision "shell", inline: "fleetctl submit stackengine.service", run: "always"
+        config.vm.provision "shell", inline: "fleetctl start stackenginedata.service", run: "always"
+        config.vm.provision "shell", inline: "fleetctl start stackengine.service", run: "always"
+        config.vm.provision "shell", inline: "fleetctl list-units", run: "always"
+      end
 
       # Uncomment below to enable NFS for sharing the host machine into the coreos-vagrant VM.
       #config.vm.synced_folder ".", "/home/core/share", id: "core", :nfs => true, :mount_options => ['nolock,vers=3,udp']
