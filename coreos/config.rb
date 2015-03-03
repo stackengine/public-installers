@@ -40,6 +40,7 @@ $update_channel='alpha'
 # You can then use the docker tool locally by setting the following env var:
 #   export DOCKER_HOST='tcp://127.0.0.1:2375'
 $expose_docker_tcp=2375
+$stack_engine_admin_port=8000
 
 # Setting for VirtualBox VMs
 $vb_gui = false
