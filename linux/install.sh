@@ -258,13 +258,15 @@ install_docker() {
     ${ECHO} "\tChecking and optionally installing current Docker (may take a while)"
     case ${INSTALL_DISTRO} in
         Debian|Ubuntu)
-            (apt-get update && apt-get install -y --upgrade lxc-docker) >/dev/null 
+            curl -sSL https://get.docker.com/ | ${SUDO} bash
+            #(apt-get update && apt-get install -y --upgrade lxc-docker) >/dev/null 
             service docker start
             ;;
 
         Amazon|Fedora|RHEL|CentOS)
-            rpm -iUvh http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
-            yum install -y docker-io > /dev/null || Error 32 "Docker Install failed"
+            curl -sSL https://get.docker.com/ | ${SUDO} bash
+            #rpm -iUvh http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+            #yum install -y docker-io > /dev/null || Error 32 "Docker Install failed"
             service docker start
             ;;
 
