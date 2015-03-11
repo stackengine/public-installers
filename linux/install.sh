@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/usr/bin/env bash
 
 # Variables used by installer
 INSTALL_DIR=${INSTALL_DIR:-/usr/local/stackengine}
@@ -15,7 +15,7 @@ CONFIG_FILE=${DATA_DIR}/config
 CURL_BIN=$(which curl)
 CURL_OPTS=
 
-# md5sum is used to validate binary 
+# md5sum is used to validate binary
 MD5_BIN=$(which md5sum)
 MD5_OPTS=
 MD5_INFOFILE=/tmp/stackengine.md5
@@ -44,16 +44,20 @@ Err_not_root() {
 cat <<EOF >&2
 You must be root (or use sudo) to execute the stackengine installer!
 
-During the install process a stackengine user is created and granted 
-access to the docker group, normal operation of stackengine binary 
+During the install process a stackengine user is created and granted
+access to the docker group, normal operation of stackengine binary
 does not require root.
 EOF
 
 Error 1 "Need root privilege"
 }
 
+command_exists() {
+    command -v "$@" > /dev/null 2>&1
+}
+
 ensure_directory() {
-    [[ -d ${1} ]] && rm -fr ${1}    
+    [[ -d ${1} ]] && rm -fr ${1}
     mkdir -p ${1}
 }
 
@@ -63,7 +67,7 @@ download_and_verify() {
     ensure_directory ${INSTALL_DIR}
     cd ${INSTALL_DIR} || Error 3 "Unable to change directory to: ${INSTALL_DIR}"
 
-    # get the binary file 
+    # get the binary file
 	${CURL_BIN} ${CURL_OPTS} -s -o stackengine ${STACKENGINE_URL} || Error 4 "Failed to fetch stackengine binary"
  	${ECHO} "\tFetching stackengine md5 information"
     # and it's md5 file
@@ -76,7 +80,7 @@ download_and_verify() {
 }
 
 set_install_type() {
-    # check that we are on linux. 
+    # check that we are on linux.
     INSTALL_SYS=$(uname -s)
     [[ ${INSTALL_SYS} != "Linux" ]] && Error 8 "Currently stackengine only installs on Linux systems"
     export INSTALL_SYS
@@ -99,12 +103,12 @@ set_install_type() {
 
 add_stackengine_user() {
     ${ECHO} "\tAdding Stackengine user and group"
-    groupadd stackengine 2>/dev/null 
-    useradd -g stackengine --system stackengine 2>/dev/null 
+    groupadd stackengine 2>/dev/null
+    useradd -g stackengine --system stackengine 2>/dev/null
 
-    ## add stackengine to docker group 
+    ## add stackengine to docker group
     ${ECHO} "\tAdding Stackengine to docker group"
-    usermod -aG docker stackengine 2>/dev/null 
+    usermod -aG docker stackengine 2>/dev/null
 }
 
 ensure_ownership() {
@@ -139,7 +143,7 @@ console none
 script
 . ${CONFIG_FILE}
 exec su -s /bin/sh -c 'exec "\$0" "\$@"' stackengine -- ${BINFILE} --logfile ${LOG_PATHNAME} \${STACKENGINE_ARGS}
-end script 
+end script
 EOF
 
     initctl reload-configuration
@@ -167,13 +171,13 @@ install_sysv_init() {
 # Default-Start: 2 3 4 5
 # Default-Stop:  0 1 6
 # Short-Description: start and stop stackengine controller
-# Description: stackengine controller 
+# Description: stackengine controller
 ### END INIT INFO
 
 # Source function library.
 . /etc/init.d/functions
 
-# Source optional configuration file 
+# Source optional configuration file
 if [ -f ${CONFIG_FILE} ] ; then
     . ${CONFIG_FILE}
 fi
@@ -254,36 +258,35 @@ EOF
     ln -s "../init.d/stackengine" "/etc/rc6.d/K99stackengine"
 }
 
+check_docker() {
+    # kick docker service once on RHELs just to
+    docker ps
+    RET=$?
+    if [[ ${RET} != 0 && "Amazon|Fedora|RHEL|CentOS" =~ ${INSTALL_DISTRO} ]]; then
+        service docker restart
+    elif [[ ${RET} != 0 ]]; then
+        ${ECHO} "Docker service not running. Check logs."
+        exit 1
+    fi
+    ${ECHO} "Docker service running."
+}
+
 install_docker() {
+    DOCKLOG='/tmp/docker_install.log'
     ${ECHO} "\tChecking and optionally installing current Docker (may take a while)"
-    case ${INSTALL_DISTRO} in
-        Debian|Ubuntu)
-            if hash docker 2>/dev/null; then
-                ${ECHO} "a docker install already detected"
-            elif hash lxc-docker 2>/dev/null; then
-                ${ECHO} "a docker install already detected"
-            else
-                bash <(curl -sSL https://get.docker.com/)
-            fi
-            service docker start
-            ;;
-
-        Amazon|Fedora|RHEL|CentOS)
-            if hash docker 2>/dev/null; then
-                ${ECHO} "a docker install already detected"
-            elif hash lxc-docker 2>/dev/null; then
-                ${ECHO} "a docker install already detected"
-            else
-                bash <(curl -sSL https://get.docker.com/)
-            fi
-            service docker start
-            ;;
-
-        *)
-            Error 10 "Unable to install Docker on ${INSTALL_DISTRO}" 
-            ;;
-    esac
-
+    # use docker.com's installer script
+    if command_exists docker || command_exists lxc-docker; then
+        check_docker
+        ${ECHO} "\tDocker already installed."
+        return
+    fi
+    ${CURL_BIN} -sSL https://get.docker.com/ | sh &> ${DOCKLOG}
+    if [[ $? != 0 ]]; then
+        ${ECHO} "\n\tDocker Install Failed. Check ${DOCKLOG}"
+        exit 1
+    fi
+    check_docker
+    ${ECHO} "\tDocker install successfull. Proceeding."
 }
 
 generate_license() {
@@ -304,7 +307,7 @@ install_stackengine() {
 	ensure_directory ${LOG_DIR}
 	ensure_directory ${DATA_DIR}
 
-    # 
+    #
     cat <<EOF  >${CONFIG_FILE}
 # A generated lic ID
 export ID=${ID}
@@ -315,29 +318,29 @@ export ID=${ID}
 STACKENGINE_ARGS="${STACKENGINE_ARGS}"
 
 #
-# The following example enables ALL looging 
+# The following example enables ALL looging
 # (uncomment this line to open the logging flood gates)
-STACKENGINE_ARGS="\${STACKENGINE_ARGS} --debug all"
+STACKENGINE_ARGS="\${STACKENGINE_ARGS}"
 
 # ----------- for testing remove when done
 export SE_LICENSE_SERVER=https://lic-testing.stackengine.com
 EOF
 
-	download_and_verify
+    download_and_verify
     ensure_ownership
 
-    # install an init script 
+    # install an init script
     case ${INSTALL_DISTRO} in
         Debian|Ubuntu)
             install_upstart_init
             ;;
 
         Amazon|Fedora|RHEL|CentOS)
-            [ -e /sbin/initctl -a -e /etc/init ] && install_upstart_init || install_sysv_init 
+            [ -e /sbin/initctl -a -e /etc/init ] && install_upstart_init || install_sysv_init
             ;;
 
         *)
-            Error 4 "Unable to create init files on ${INSTALL_DISTRO}" 
+            Error 4 "Unable to create init files on ${INSTALL_DISTRO}"
             ;;
     esac
 }
@@ -359,17 +362,17 @@ if [ "`id -u`" != "0" ]; then
     exit 1
 fi
 
-# validate access to curl(1) 
+# validate access to curl(1)
 [[ -z "${CURL_BIN}" ]] && Error 2 "unable to locate curl(1)"
 
-# validate access to md5suml(1) 
+# validate access to md5suml(1)
 [[ -z "${MD5_BIN}" ]] && Error 2 "unable to locate md5sum(1)"
 
 # if the stackengine controller is running stop it
-# ignore any errors. 
+# ignore any errors.
 stop stackengine 2> /dev/null
 
-# install 
+# install
 install_stackengine
 
 start stackengine
