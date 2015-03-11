@@ -317,13 +317,8 @@ export ID=${ID}
 #
 STACKENGINE_ARGS="${STACKENGINE_ARGS}"
 
-#
-# The following example enables ALL looging
-# (uncomment this line to open the logging flood gates)
-STACKENGINE_ARGS="\${STACKENGINE_ARGS}"
-
 # ----------- for testing remove when done
-export SE_LICENSE_SERVER=https://lic-testing.stackengine.com
+export SE_LICENSE_SERVER=https://lic.stackengine.com
 EOF
 
     download_and_verify
