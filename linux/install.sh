@@ -317,7 +317,6 @@ export ID=${ID}
 #
 STACKENGINE_ARGS="${STACKENGINE_ARGS}"
 
-# ----------- for testing remove when done
 export SE_LICENSE_SERVER=https://lic.stackengine.com
 EOF
 
