@@ -258,15 +258,24 @@ install_docker() {
     ${ECHO} "\tChecking and optionally installing current Docker (may take a while)"
     case ${INSTALL_DISTRO} in
         Debian|Ubuntu)
-            bash <(curl -sSL https://get.docker.com/)
-            #(apt-get update && apt-get install -y --upgrade lxc-docker) >/dev/null 
+            if hash docker 2>/dev/null; then
+                ${ECHO} "a docker install already detected"
+            elif hash lxc-docker 2>/dev/null; then
+                ${ECHO} "a docker install already detected"
+            else
+                bash <(curl -sSL https://get.docker.com/)
+            fi
             service docker start
             ;;
 
         Amazon|Fedora|RHEL|CentOS)
-            bash <(curl -sSL https://get.docker.com/)
-            #rpm -iUvh http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
-            #yum install -y docker-io > /dev/null || Error 32 "Docker Install failed"
+            if hash docker 2>/dev/null; then
+                ${ECHO} "a docker install already detected"
+            elif hash lxc-docker 2>/dev/null; then
+                ${ECHO} "a docker install already detected"
+            else
+                bash <(curl -sSL https://get.docker.com/)
+            fi
             service docker start
             ;;
 
