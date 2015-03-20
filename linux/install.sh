@@ -340,11 +340,10 @@ check_docker() {
 install_docker() {
     DOCKLOG='/tmp/docker_install.log'
     ${ECHO} "\tInstalling current Docker (may take a while)"
-    ${CURL_BIN} -sSL http://get.docker.com/ -o /tmp/docker_install.sh > ${DOCKLOG} 2>&1 || Error 999 "curl of docker installer failed. Check ${DOCKLOG}"
+    ${CURL_BIN} -sSL http://get.docker.com/ -o /tmp/docker_install.sh > ${DOCKLOG} 2>&1 || Error 343 "curl of docker installer failed. Check ${DOCKLOG}"
     sh /tmp/docker_install.sh > ${DOCKLOG} 2>&1 || Error 344 "Docker Install Failed. Check ${DOCKLOG}"
 
     check_docker
-    # [[ $? == 0 ]] || Error 347 "Docker install failed."
 
     ${ECHO} "\tDocker install successfull. Proceeding."
 }
@@ -374,7 +373,7 @@ EOF
         install_sysv_init
     fi
 
-    [[ $? == 0 ]] || Error 377 "Service_type:${SVC_TYPE} install failed."
+    [[ $? == 0 ]] || Error 376 "Service_type:${SVC_TYPE} install failed."
 }
 
 uninstall_stackengine() {
@@ -398,7 +397,7 @@ access to the docker group, normal operation of stackengine binary
 does not require root.
 EOF
 
-    Error 401 "Need root privilege"
+    Error 400 "Need root privilege"
     exit 1
 fi
 
@@ -413,7 +412,7 @@ check_docker
 if [[ $? != 0 ]]; then
     ${ECHO} "2nd check of docker"
     check_docker
-    [[ $? == 0 ]] || Error 416 "Docker service not running. Check logs."
+    [[ $? == 0 ]] || Error 415 "Docker service not running. Check logs."
 fi
 
 echo
