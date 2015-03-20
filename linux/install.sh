@@ -94,7 +94,7 @@ detect_os() {
     esac
 
     # override if systemd detected
-    if [[ "$(systemctl --version > /dev/null; echo $?)" == 0 ]]; then
+    if [[ "$(systemctl --version > /dev/null 2>&1; echo $?)" == 0 ]]; then
         ${ECHO} "\tOverriding service type, systemd found."
         export CONFIG_FILE=/etc/sysconfig/stackengine
         export SVC_TYPE='systemd'
