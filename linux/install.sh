@@ -340,8 +340,8 @@ check_docker() {
 install_docker() {
     DOCKLOG='/tmp/docker_install.log'
     ${ECHO} "\tInstalling current Docker (may take a while)"
-    ${CURL_BIN} -sSL http://get.docker.com/ | sh > ${DOCKLOG} 2>&1
-    [[ $? == 0 ]] || Error 344 "\n\tDocker Install Failed. Check ${DOCKLOG}"
+    ${CURL_BIN} -sSL http://get.docker.com/ -o /tmp/docker_install.sh > ${DOCKLOG} 2>&1 || Error 999 "curl of docker installer failed. Check ${DOCKLOG}"
+    sh /tmp/docker_install.sh > ${DOCKLOG} 2>&1 || Error 344 "Docker Install Failed. Check ${DOCKLOG}"
 
     check_docker
     # [[ $? == 0 ]] || Error 347 "Docker install failed."
