@@ -164,12 +164,13 @@ add_stackengine_user() {
     usermod -aG ${DOCKER_GROUP:-docker} stackengine 2> /dev/null
 
     # bypass adding docker group to docker.sock if its already done
-    if [[ "$(grep -q ${DOCKER_GROUP} /etc/sysconfig/docker)" != "" || \
-          "$(stat -c %G /var/run/docker.sock)" != "${DOCKERGROUP}" ]]; then
-        ${ECHO} "\tDocker socket permissions adjusted to allow ${DOCKER_GROUP} group access."
-        DOCKER_OPT=$(grep OPTIONS /etc/sysconfig/docker)
-        NEW_OPT="$(echo $DOCKER_OPT | sed "s/'$//") -G ${DOCKER_GROUP}'"
-        sed -i "s/$DOCKER_OPT/$NEW_OPT/" /etc/sysconfig/docker
+    if [[ "$(stat -c %G /var/run/docker.sock)" != "${DOCKERGROUP}" ]]; then
+        if [[ "$(grep -q ${DOCKER_GROUP} /etc/sysconfig/docker)" == "" ]]; then
+            ${ECHO} "\tDocker socket permissions adjusted to allow ${DOCKER_GROUP} group access."
+            DOCKER_OPT=$(grep OPTIONS /etc/sysconfig/docker)
+            NEW_OPT="$(echo $DOCKER_OPT | sed "s/'$//") -G ${DOCKER_GROUP}'"
+            sed -i "s/$DOCKER_OPT/$NEW_OPT/" /etc/sysconfig/docker
+        fi
         control_service "docker" "stop"
         control_service "docker" "start"
         sleep 2
