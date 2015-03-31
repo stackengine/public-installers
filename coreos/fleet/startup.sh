@@ -95,7 +95,7 @@ control_service() {
 wait_to_start() {
 	MSG=$1
 	ACTION=$2
-	MAX=${3:-10}
+	MAX=${3:-15}
 	C=0
 	printf "${MSG}:"
 	while [[ -z $(${ACTION} 2> /dev/null) ]]; do
