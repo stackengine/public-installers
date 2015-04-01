@@ -13,7 +13,7 @@ INSTALL_LOG="stackengine_install.log" && echo > ${INSTALL_LOG}
 
 DATA_DIR=${DATA_DIR:-/var/lib/stackengine}
 CONFIG_FILE=${DATA_DIR}/config
-COMPONENTS_FILE=${DATA_DIR}/PrebakedComponents.json
+COMPONENTS_FILE=${DATA_DIR}/templates.json
 
 # curl is used to fetch binary and md5 info
 CURL_BIN=$(which curl)
