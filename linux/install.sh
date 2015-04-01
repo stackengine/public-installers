@@ -4,7 +4,6 @@ tabs 2
 # Variables used by installer
 INSTALL_DIR=${INSTALL_DIR:-/usr/local/stackengine}
 BINFILE=${INSTALL_DIR}/stackengine
-COMPONENTSFILE=${INSTALL_DIR}/PrebakedComponents.json
 #
 LOG_DIR=${LOG_DIR:-/var/log/stackengine}
 LOG_FILENAME=stackengine.log
@@ -14,6 +13,7 @@ INSTALL_LOG="stackengine_install.log" && echo > ${INSTALL_LOG}
 
 DATA_DIR=${DATA_DIR:-/var/lib/stackengine}
 CONFIG_FILE=${DATA_DIR}/config
+COMPONENTS_FILE=${DATA_DIR}/PrebakedComponents.json
 
 # curl is used to fetch binary and md5 info
 CURL_BIN=$(which curl)
@@ -419,7 +419,7 @@ EOF
 }
 
 add_stackengine_components() {
-    ${CURL_BIN} ${CURL_OPTS} -s -o ${COMPONENTSFILE} ${STACKENGINE_COMPONENTS_URL} || Error 151 "Failed to fetch stackengine components"
+    ${CURL_BIN} ${CURL_OPTS} -s -o ${COMPONENTS_FILE} ${STACKENGINE_COMPONENTS_URL} || Error 151 "Failed to fetch stackengine components"
 }
 
 uninstall_stackengine() {
