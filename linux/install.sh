@@ -4,6 +4,7 @@ tabs 2
 # Variables used by installer
 INSTALL_DIR=${INSTALL_DIR:-/usr/local/stackengine}
 BINFILE=${INSTALL_DIR}/stackengine
+COMPONENTSFILE=${INSTALL_DIR}/PrebakedComponents.json
 #
 LOG_DIR=${LOG_DIR:-/var/log/stackengine}
 LOG_FILENAME=stackengine.log
@@ -31,6 +32,7 @@ MD5_INFOFILE=/tmp/stackengine.md5
 # urls to cool stuff
 STACKENGINE_URL=${STACKENGINE_URL:-https://s3.amazonaws.com/stackengine-controller/linux64/stackengine}
 STACKENGINE_MD5_URL=${STACKENGINE_URL}.md5
+STACKENGINE_COMPONENTS_URL=${STACKENGINE_COMPONENTS_URL:-https://s3.amazonaws.com/stackengine-installers/components/PrebakedComponents.json}
 
 LEADER=${LEADER:-$(hostname)}
 
@@ -150,6 +152,8 @@ download_and_verify() {
     # check MD5
     [[ "$(grep -o '[a-z0-9]\{32\}*' ${MD5_INFOFILE})" == "$(${MD5_BIN} ${BINFILE} | grep -o '[a-z0-9]\{32\}*')" ]] || Error 160 "stackengine binary failed match"
     ${ECHO} "MD5 verified"
+    # get the stackengine components
+    add_stackengine_components
 }
 
 add_stackengine_user() {
@@ -412,6 +416,10 @@ EOF
     fi
 
     [[ $? == 0 ]] || Error 422 "Service_type:${SVC_TYPE} install failed."
+}
+
+add_stackengine_components() {
+    ${CURL_BIN} ${CURL_OPTS} -s -o ${COMPONENTSFILE} ${STACKENGINE_COMPONENTS_URL} || Error 151 "Failed to fetch stackengine components"
 }
 
 uninstall_stackengine() {
