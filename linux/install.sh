@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+tabs 2
 # Variables used by installer
 INSTALL_DIR=${INSTALL_DIR:-/usr/local/stackengine}
 BINFILE=${INSTALL_DIR}/stackengine
@@ -8,21 +9,39 @@ LOG_DIR=${LOG_DIR:-/var/log/stackengine}
 LOG_FILENAME=stackengine.log
 LOG_PATHNAME=${LOG_DIR}/${LOG_FILENAME}
 
+INSTALL_LOG="stackengine_install.log" && echo > ${INSTALL_LOG}
+
 DATA_DIR=${DATA_DIR:-/var/lib/stackengine}
 CONFIG_FILE=${DATA_DIR}/config
+COMPONENTS_FILE=${DATA_DIR}/templates.json
 
 # curl is used to fetch binary and md5 info
 CURL_BIN=$(which curl)
-CURL_OPTS=
+CURL_ERROR_MSG="
+
+May have failed due to firewall or proxy setup of your network.
+curl accepts options passed by CURL_OPTS environment variable.
+
+"
 
 # md5sum is used to validate binary
 MD5_BIN=$(which md5sum)
 MD5_OPTS=
 MD5_INFOFILE=/tmp/stackengine.md5
 
+# validate access to curl(1)
+[[ -z "${CURL_BIN}" ]] && Error 33 "unable to locate curl(1)"
+# validate access to md5suml(1)
+[[ -z "${MD5_BIN}" ]] && Error 35 "unable to locate md5sum(1)"
+
 # urls to cool stuff
 STACKENGINE_URL=${STACKENGINE_URL:-https://s3.amazonaws.com/stackengine-controller/linux64/stackengine}
 STACKENGINE_MD5_URL=${STACKENGINE_URL}.md5
+STACKENGINE_COMPONENTS_URL=${STACKENGINE_COMPONENTS_URL:-https://s3.amazonaws.com/stackengine-installers/components/PrebakedComponents.json}
+
+IP=$(ip route get 8.8.8.8 2> /dev/null | awk 'NR==1 {print $NF}' | grep '[0-9]\{1\}')
+IP=${IP:-127.0.0.1}
+[[ "${IP}" == "127.0.0.1" ]] && STACKENGINE_ARGS="-bind=${IP}"
 
 LEADER=${LEADER:-$(hostname)}
 
@@ -34,91 +53,180 @@ ECHO="/bin/echo -e "
 # use arg 1 as the return code and emit remaining args as error message
 #
 Error() {
-    ec=$1
+    local ec=$1
     shift
-    ${ECHO} "\nError: " $*
-    exit $ec
-}
-
-Err_not_root() {
-cat <<EOF >&2
-You must be root (or use sudo) to execute the stackengine installer!
-
-During the install process a stackengine user is created and granted
-access to the docker group, normal operation of stackengine binary
-does not require root.
-EOF
-
-Error 1 "Need root privilege"
+    ${ECHO} "\nError[${ec}]: $*"
+    exit 23
 }
 
 command_exists() {
-    command -v "$@" > /dev/null 2>&1
+    command -v "$*" > /dev/null 2>&1
 }
 
 ensure_directory() {
-    [[ -d ${1} ]] && rm -fr ${1}
-    mkdir -p ${1}
+    printf "\tPreparing dirs:"
+    for DIR in "$@"; do
+        printf " %s" ${DIR}
+
+        [[ $(mkdir -p ${DIR}) ]] && Error 71 "Failed mkdir ${DIR}"
+        [[ $(chown -R stackengine:stackengine ${DIR}) ]] && Error 72 "Failed chown ${DIR}"
+    done
+    echo
 }
 
-download_and_verify() {
- 	${ECHO} "\tFetching stackengine binary"
+detect_os() {
+    printf "\tDetecting OS and services type: "
 
-    ensure_directory ${INSTALL_DIR}
-    cd ${INSTALL_DIR} || Error 3 "Unable to change directory to: ${INSTALL_DIR}"
-
-    # get the binary file
-	${CURL_BIN} ${CURL_OPTS} -s -o stackengine ${STACKENGINE_URL} || Error 4 "Failed to fetch stackengine binary"
- 	${ECHO} "\tFetching stackengine md5 information"
-    # and it's md5 file
-	${CURL_BIN} ${CURL_OPTS} -s -o ${MD5_INFOFILE} ${STACKENGINE_MD5_URL} || Error 5 "Failed to fetch md5 information for stackengine binary"
-
- 	${ECHO} "\tValidating.."
-	# check MD5
-    ${MD5_BIN} --quiet -c ${MD5_INFOFILE} >/dev/null 2>&1 || Error 6 "Validation of stackengine binary failed"
-	${ECHO} "\tMD5 verified"
-}
-
-set_install_type() {
     # check that we are on linux.
-    INSTALL_SYS=$(uname -s)
-    [[ ${INSTALL_SYS} != "Linux" ]] && Error 8 "Currently stackengine only installs on Linux systems"
+    INSTALL_SYS="$(uname -s)"
+    [[ ${INSTALL_SYS} != "Linux" ]] && Error 82 "Currently stackengine only installs on Linux systems"
     export INSTALL_SYS
 
     # now figure out Distribution
-    INSTALL_DISTRO=$(awk 'NR==1{print $1}' /etc/issue)
-    [[ -z ${INSTALL_DISTRO} ]] && Error 9 "Unable to figure out the Distribution for this linux system"
+    LINUX_DIST=( $(grep -o '[a-zA-Z]* [0-9][0-9]*\.*[0-9]*' /etc/issue) )
+    INSTALL_DISTRO=${LINUX_DIST[0]}
+    DISTRO_VER=${LINUX_DIST[1]}
+    [[ -z "$(grep -o Amazon /etc/issue)" ]] || INSTALL_DISTRO='Amazon'
 
     [[ -e "/etc/redhat-release" ]] && INSTALL_DISTRO="RHEL"
-
+    [[ -z ${INSTALL_DISTRO} ]] && Error 92 "Unable to figure out the Distribution for this linux system"
     export INSTALL_DISTRO
 
-    # override config file location iff needed (if it's not upstart)
+    # override config file location if needed (if it's not upstart)
     case ${INSTALL_DISTRO} in
+        Debian|Ubuntu)
+            export SVC_TYPE='upstart'
+            ;;
         Amazon|Fedora|RHEL|CentOS)
             [ -e /sbin/initctl -a -e /etc/init ] || export CONFIG_FILE=/etc/sysconfig/stackengine
+            export SVC_TYPE='sys5'
+            [[ -e "/etc/init/rc.conf" ]] && export SVC_TYPE='upstart'
+            ;;
+        openSUSE)
+            export CONFIG_FILE=/etc/sysconfig/stackengine
+            export SVC_TYPE='systemd'
+            ;;
+        *)
+            Error 110 "Unable to determine distro type on ${INSTALL_DISTRO}"
             ;;
     esac
+
+    # override if systemd detected
+    if [[ "${SVC_TYPE}" != "systemd" && "$(systemctl --version > /dev/null 2>&1; echo $?)" == 0 ]]; then
+        # ${ECHO} "\tOverriding service type, systemd found."
+        export CONFIG_FILE=/etc/sysconfig/stackengine
+        export SVC_TYPE='systemd'
+    fi
+    ${ECHO} "${INSTALL_DISTRO} family distro found, using ${SVC_TYPE}"
+}
+
+# abstract services start/stop/restart cli
+control_service() {
+    local SERVICE=$1
+    local ACTION=$2
+    local IGNORE=$3
+    local CMD=''
+    if [[ "${SVC_TYPE}" == "systemd" ]]; then
+        CMD="systemctl ${ACTION} ${SERVICE}.service"
+    elif [[ -e "/etc/init/${SERVICE}.conf" ]]; then
+        # upstart
+        CMD="${ACTION} ${SERVICE}"
+    elif [[ -e "/etc/init.d/${SERVICE}" ]]; then
+        # sys5
+        CMD="/etc/init.d/${SERVICE} ${ACTION}"
+    fi
+
+    ${CMD} >> ${INSTALL_LOG} 2>&1
+    local RETVAL=$?
+
+    if [[ "${RETVAL}" != 0 && "${IGNORE}" == "" ]]; then
+        Error 143 "\"${CMD}\" Failed with error code: ${RETVAL}"
+    fi
+}
+
+curl_remotefile() {
+    local OUTFILE=$1
+    local CURL_URL=$2
+    local ERRNUM=${3//Error /}
+    local ERRMSG=$4
+    local CURL_LOG=${5:-/dev/null}
+
+    CURL_CMD="${CURL_BIN} ${CURL_OPTS} -s -o ${OUTFILE} ${CURL_URL}"
+    ${CURL_CMD} >> ${CURL_LOG} 2>&1
+    local RET=$?
+    [[ ${RET} == 0 ]] || Error ${ERRNUM} "[${RET}] ${ERRMSG}\n${CURL_CMD} ${CURL_ERROR_MSG}"
+}
+
+verify_md5() {
+    local MD5FILE=$1
+    local FILETOCHK=$2
+    local IGNORE=$2
+
+    printf "\tValidating.. "
+    # check MD5
+    if [[ "$(grep -o '[a-z0-9]\{32\}*' ${MD5FILE})" != "$(${MD5_BIN} ${FILETOCHK} | grep -o '[a-z0-9]\{32\}*')" ]]; then
+        [[ -z "${IGNORE}" ]] || return 1
+        Error 169 "stackengine binary failed match"
+    fi
+    ${ECHO} "MD5 verified"
+    return 0
+}
+
+download_and_verify() {
+    # and it's md5 file
+    ${ECHO} "\tFetching stackengine md5 information"
+
+    curl_remotefile "${MD5_INFOFILE}" "${STACKENGINE_MD5_URL}" "Error 179" "Failed to fetch md5 information for stackengine binary"
+
+    if [[ -s "${BINFILE}" ]]; then
+        chown stackengine:stackengine ${BINFILE}
+        chmod 755 ${BINFILE}
+        verify_md5 "${MD5_INFOFILE}" "${BINFILE}" "ignore"
+        [[ $? == 0 ]] && return
+    fi
+
+    ${ECHO} "\tFetching stackengine binary"
+
+    # get the binary file
+    curl_remotefile "${BINFILE}" "${STACKENGINE_URL}" "Error 191" "Failed to fetch stackengine binary"
+    verify_md5 "${MD5_INFOFILE}" "${BINFILE}"
+    chown stackengine:stackengine ${BINFILE}
+    chmod 755 ${BINFILE}
+
+    # get the stackengine components
+    curl_remotefile "${COMPONENTS_FILE}" "${STACKENGINE_COMPONENTS_URL}" "Error 197" "Failed to fetch stackengine components"
 }
 
 add_stackengine_user() {
     ${ECHO} "\tAdding Stackengine user and group"
-    groupadd stackengine 2>/dev/null
-    useradd -g stackengine --system stackengine 2>/dev/null
+    groupadd stackengine 2> /dev/null
+    useradd -g stackengine --system stackengine 2> /dev/null
+
+    DOCKER_GROUP=$(grep -o 'docker[a-z0-9]*' /etc/group)
 
     ## add stackengine to docker group
     ${ECHO} "\tAdding Stackengine to docker group"
-    usermod -aG docker stackengine 2>/dev/null
+    usermod -aG ${DOCKER_GROUP:-docker} stackengine 2> /dev/null
+
+    # bypass adding docker group to docker.sock if its already done
+    if [[ "$(stat -c %G /var/run/docker.sock)" != "${DOCKERGROUP}" ]]; then
+        if [[ "$(grep -q ${DOCKER_GROUP} /etc/sysconfig/docker)" == "" ]]; then
+            ${ECHO} "\tDocker socket permissions adjusted to allow ${DOCKER_GROUP} group access."
+            DOCKER_OPT=$(grep OPTIONS /etc/sysconfig/docker | grep -v '^#')
+            if [[ -n "${DOCKER_OPT}" ]]; then
+              NEW_OPT="$(echo ${DOCKER_OPT} | sed "s/\$//") -G ${DOCKER_GROUP}"
+              sed -i "s/${DOCKER_OPT}/${NEW_OPT}/" /etc/sysconfig/docker
+            fi
+        fi
+        control_service "docker" "stop"
+        control_service "docker" "start"
+        sleep 2
+        check_docker
+    fi
 }
 
-ensure_ownership() {
-    ${ECHO} "\tChecking and setting ownership"
-    chown stackengine:stackengine ${BINFILE}
-    chmod 755 ${BINFILE}
-    chown -R stackengine:stackengine ${LOG_DIR}
-    chown -R stackengine:stackengine ${DATA_DIR}
-}
 
+##########################################################
 install_upstart_init() {
     ${ECHO} "\t-------------------------------"
     ${ECHO} "\tInstalling upstart init script"
@@ -147,6 +255,31 @@ end script
 EOF
 
     initctl reload-configuration
+}
+
+install_systemd_init() {
+    ${ECHO}
+    ${ECHO} "\t------------------------------"
+    ${ECHO} "\tInstalling Systemd init script"
+    ${ECHO} "\t------------------------------"
+    rm -f /usr/lib/systemd/system/stackengine.service
+    cat <<EOF > /usr/lib/systemd/system/stackengine.service
+[Unit]
+Description=StackEngine Service
+Documentation=http://docs.stackengine.com
+After=network.target
+After=docker.target
+
+[Service]
+User=stackengine
+Group=stackengine
+EnvironmentFile=/etc/sysconfig/stackengine
+ExecStart=/usr/local/stackengine/stackengine \$STACKENGINE_ARGS
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
 }
 
 install_sysv_init() {
@@ -257,57 +390,55 @@ EOF
     ln -s "../init.d/stackengine" "/etc/rc5.d/S99stackengine"
     ln -s "../init.d/stackengine" "/etc/rc6.d/K99stackengine"
 }
+##########################################################
 
 check_docker() {
-    # kick docker service once on RHELs just to
-    docker ps
-    RET=$?
-    if [[ ${RET} != 0 && "Amazon|Fedora|RHEL|CentOS" =~ ${INSTALL_DISTRO} ]]; then
-        service docker restart
-    elif [[ ${RET} != 0 ]]; then
-        ${ECHO} "Docker service not running. Check logs."
-        exit 1
+    if command_exists "docker" || command_exists "lxc-docker"; then
+        $(which docker) ps > /dev/null 2>&1; RET=$?
+        if [[ "Amazon|Fedora|RHEL|CentOS" =~ ${INSTALL_DISTRO} && ${RET} != 0 ]]; then
+            ${ECHO} "\tRHEL distro found, but docker not running. Restarting docker service."
+            control_service "docker" "stop" "ignore"
+            control_service "docker" "start"
+            $(which docker) ps > /dev/null 2>&1; RET=$?
+        fi
+
+        [[ ${RET} == 0 ]] || Error 405 "Docker service not running. Check logs."
+        ${ECHO} "\tDocker appears to be running."
+        return 0
+    else
+        ${ECHO} "\tWARNING: Docker does not appear to be installed."
+        return 1
     fi
-    ${ECHO} "Docker service running."
 }
 
 install_docker() {
-    DOCKLOG='/tmp/docker_install.log'
-    ${ECHO} "\tChecking and optionally installing current Docker (may take a while)"
-    # use docker.com's installer script
-    if command_exists docker || command_exists lxc-docker; then
-        check_docker
-        ${ECHO} "\tDocker already installed."
-        return
+    if [[ "${INSTALL_DISTRO}" == "openSUSE" ]]; then
+        zypper ar -f http://download.opensuse.org/repositories/Virtualization/openSUSE_${DISTRO_VER}/ Virtualization >> ${INSTALL_LOG} 2>&1
+        [[ $? == 0 ]] || Error 417 "zypper adding virtualization repo failed"
+
+        zypper --gpg-auto-import-keys --non-interactive install --recommends docker >> ${INSTALL_LOG} 2>&1
+        [[ $? == 0 ]] || Error 420 "zypper adding docker package failed"
+
+        control_service "docker" "enable"
+        control_service "docker" "start"
+    else
+        local DOCKSH='docker_install.sh'
+        local DOCKLOG='docker_install.log'
+        ${ECHO} "\tInstalling current Docker (may take a while)"
+        curl_remotefile "${DOCKSH}" "http://get.docker.com/" "Error 428" "curl of docker installer failed. Check ${DOCKLOG}" "${DOCKLOG}"
+        sh ${DOCKSH} > ${DOCKLOG} 2>&1 || Error 429 "Docker Install Failed $(cat ${DOCKLOG})\n\nPlease retry StackEngine installer after installing Docker\n"
     fi
-    ${CURL_BIN} -sSL https://get.docker.com/ | sh &> ${DOCKLOG}
-    if [[ $? != 0 ]]; then
-        ${ECHO} "\n\tDocker Install Failed. Check ${DOCKLOG}"
-        exit 1
-    fi
+
     check_docker
+
     ${ECHO} "\tDocker install successfull. Proceeding."
 }
 
 generate_license() {
-	echo "Generating a license"
+    echo "Generating a license"
 }
 
 install_stackengine() {
-    # First see what the environment is like
-    set_install_type
-
-    # now check on docker (may upgrade)
-    install_docker
-
-    add_stackengine_user
-
-	# create stackengine required directories
-	ensure_directory ${INSTALL_DIR}
-	ensure_directory ${LOG_DIR}
-	ensure_directory ${DATA_DIR}
-
-    #
     cat <<EOF  >${CONFIG_FILE}
 # A generated lic ID
 export ID=${ID}
@@ -320,56 +451,87 @@ STACKENGINE_ARGS="${STACKENGINE_ARGS}"
 export SE_LICENSE_SERVER=https://lic.stackengine.com
 EOF
 
-    download_and_verify
-    ensure_ownership
+    if [[ "${SVC_TYPE}" == "systemd" ]]; then
+        install_systemd_init
+    elif [[ "${SVC_TYPE}" == "upstart" ]]; then
+        install_upstart_init
+    elif [[ "${SVC_TYPE}" == "sys5" ]]; then
+        install_sysv_init
+    fi
 
-    # install an init script
-    case ${INSTALL_DISTRO} in
-        Debian|Ubuntu)
-            install_upstart_init
-            ;;
-
-        Amazon|Fedora|RHEL|CentOS)
-            [ -e /sbin/initctl -a -e /etc/init ] && install_upstart_init || install_sysv_init
-            ;;
-
-        *)
-            Error 4 "Unable to create init files on ${INSTALL_DISTRO}"
-            ;;
-    esac
+    [[ $? == 0 ]] || Error 462 "Service_type:${SVC_TYPE} install failed."
 }
 
 uninstall_stackengine() {
-	rm -rf ${INSTALL_DIR}
-	rm -rf ${LOG_DIR}
-	rm -rf ${DATA_DIR}
+    control_service "stackengine" "stop" "ignore"
+    [[ -z "$(pgrep stackengine)" ]] && pkill stackengine
+    for DAEMON in '/etc/init.d/stackengine' '/etc/init/stackengine' '/usr/lib/systemd/system/stackengine.service'; do
+      [[ -e "${DAEMON}" ]] && rm -f "${DAEMON}"
+    done
+    for DIR in ${INSTALL_DIR} ${LOG_DIR} ${DATA_DIR}; do
+        rm -rf ${DIR}
+    done
 }
 
-###############################
-#  Start of installer script  #
-###############################
-${ECHO} "\nInstalling StackEngine Controller: $(date)"
+check_stackengine() {
+    local OUTPUT=$(${CURL_BIN} -s "http://${IP}:8000/public/signup.html" | grep -c "StackEngine Controller Admin User Creation")
+
+    C=0
+    printf "\tChecking StackEngine server:"
+    while [[ "${OUTPUT}" != "2" && ${C} -lt 20 ]]; do
+        OUTPUT=$(${CURL_BIN} -s "http://${IP}:8000/public/signup.html" | grep -c "StackEngine Controller Admin User Creation")
+        printf '.'
+        sleep 2
+        C=$[$C+1]
+    done
+
+    [[ "${OUTPUT}" == "2" ]] || Error 488 "StackEngine controller page inaccessible."
+    ${ECHO} " StackEngine controller page confirmed."
+}
+
+#############################################################################################
+################################  Start of installer script  ################################
+#############################################################################################
+${ECHO} "Installing StackEngine Controller: $(date)"
 
 # Check to see if you're root
 if [ "`id -u`" != "0" ]; then
-    Err_not_root
+    cat <<EOF >&2
+You must be root (or use sudo) to execute the stackengine installer!
+
+During the install process a stackengine user is created and granted
+access to the docker group, normal operation of stackengine binary
+does not require root.
+EOF
+
+    Error 507 "Need root privilege"
     exit 1
 fi
 
-# validate access to curl(1)
-[[ -z "${CURL_BIN}" ]] && Error 2 "unable to locate curl(1)"
+detect_os
 
-# validate access to md5suml(1)
-[[ -z "${MD5_BIN}" ]] && Error 2 "unable to locate md5sum(1)"
+echo
+${ECHO} "Docker:"
+check_docker
+[[ $? == 0 ]] || install_docker
 
-# if the stackengine controller is running stop it
-# ignore any errors.
-stop stackengine 2> /dev/null
+echo
+${ECHO} "StackEngine:"
+# if the stackengine controller is running stop it, ignore any errors.
+control_service "stackengine" "stop" "ignore"
 
-# install
+add_stackengine_user
+
+ensure_directory "${INSTALL_DIR}" "${LOG_DIR}" "${DATA_DIR}"
+download_and_verify
+
+# install stackengine service
 install_stackengine
 
-start stackengine
+# start stackengine service
+control_service "stackengine" "start"
+
+check_stackengine
 
 ${ECHO} "Install completed: $(date)\n"
 ${ECHO} "\nConnect to StackEngine Admin via: http://${LEADER}:8000\n"
